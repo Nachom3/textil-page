@@ -1,0 +1,154 @@
+// ---------- GENERATOR & DATASOURCE ----------
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// ---------- MODELOS PRINCIPALES ----------
+
+model Pedido {
+  id        Int              @id @default(autoincrement())
+  numero    Int              @unique      // ej: 40
+  cliente   String
+  contacto  String?
+
+  productos PedidoProducto[]
+  lotes     Lote[]           @relation("PedidoLotes")
+
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model PedidoProducto {
+  id         Int      @id @default(autoincrement())
+  pedidoId   Int
+  productoId Int
+  cantidad   Int
+
+  pedido   Pedido   @relation(fields: [pedidoId], references: [id])
+  producto Producto @relation(fields: [productoId], references: [id])
+}
+
+model Producto {
+  id          Int               @id @default(autoincrement())
+  nombre      String
+  codigo      String            @unique   // código único (5 dígitos o por talle)
+  tieneTalles Boolean           @default(false)
+
+  pedidos     PedidoProducto[]  // <-- lado opuesto de PedidoProducto.producto
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+
+// ---------- LOTES & ESTADOS ----------
+
+enum LoteEstado {
+  ACTIVO
+  DIVIDIDO
+  TERMINADO
+}
+
+model Lote {
+  id                     Int       @id @default(autoincrement())
+  codigo                 String    @unique   // ej: "40.1", "40.3"
+  pedidoId               Int
+  parentId               Int?
+  cantidad               Int
+  estado                 LoteEstado @default(ACTIVO)
+
+  // FKs para ubicación actual
+  procesoActualId        Int?
+  tallerActualId         Int?
+  transportistaActualId  Int?
+
+  // Relaciones
+  pedido        Pedido   @relation("PedidoLotes", fields: [pedidoId], references: [id])
+  parent        Lote?    @relation("SubLotes", fields: [parentId], references: [id])
+  children      Lote[]   @relation("SubLotes")
+
+  // Ubicación actual (con nombres de relación distintos para evitar conflictos)
+  procesoActual      Proceso?      @relation("LoteProcesoActual", fields: [procesoActualId], references: [id])
+  tallerActual       Taller?       @relation("LoteTallerActual", fields: [tallerActualId], references: [id])
+  transportistaActual Transportista? @relation("LoteTransportistaActual", fields: [transportistaActualId], references: [id])
+
+  procesosHistorial ProcesoRealizado[] @relation("LoteProcesoRealizado")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+// ---------- PROCESOS / TALLERES / TRANSPORTISTAS ----------
+
+model Proceso {
+  id     Int      @id @default(autoincrement())
+  nombre String   @unique  // "Costura", "Bordado", etc.
+
+  // lotes donde este proceso es el actual
+  lotesProcesoActual Lote[]            @relation("LoteProcesoActual")
+
+  // historial donde este proceso participa
+  procesosHistorial  ProcesoRealizado[] @relation("ProcesoRealizadoProceso")
+}
+
+model Taller {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  tipo      String   // "Costura", "Bordado", etc.
+  direccion String?
+  telefono  String?
+
+  // lotes que están actualmente en este taller
+  lotesActuales    Lote[]             @relation("LoteTallerActual")
+
+  // historial donde este taller participa
+  procesosHistorial ProcesoRealizado[] @relation("ProcesoRealizadoTaller")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Transportista {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  telefono  String?
+
+  // lotes que están actualmente con este transportista
+  lotesActuales     Lote[]             @relation("LoteTransportistaActual")
+
+  // historial donde este transportista participa
+  procesosHistorial ProcesoRealizado[] @relation("ProcesoRealizadoTransportista")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+// ---------- HISTORIAL ----------
+
+model ProcesoRealizado {
+  id              Int      @id @default(autoincrement())
+  loteId          Int
+  procesoId       Int?
+  tallerId        Int?
+  transportistaId Int?
+
+  fechaEntrada    DateTime @default(now())
+  fechaSalida     DateTime?
+  notas           String?
+
+  lote          Lote          @relation("LoteProcesoRealizado", fields: [loteId], references: [id])
+
+  // cada relación tiene un nombre propio para no chocar
+  proceso       Proceso?      @relation("ProcesoRealizadoProceso", fields: [procesoId], references: [id])
+  taller        Taller?       @relation("ProcesoRealizadoTaller", fields: [tallerId], references: [id])
+  transportista Transportista? @relation("ProcesoRealizadoTransportista", fields: [transportistaId], references: [id])
+}
