@@ -9,6 +9,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// -- CLIENTE -- //
+model Cliente {
+  id        Int     @id @default(autoincrement())
+
+  nombre    String?
+  apellido  String?
+  ubicacion String?
+  telefono  String?
+  email     String?
+}
 
 // ---------- MODELOS PRINCIPALES ----------
 
@@ -41,6 +51,8 @@ model Producto {
   codigo      String            @unique   // código único (5 dígitos o por talle)
   tieneTalles Boolean           @default(false)
 
+  lotes       Lote[]            @relation("ProductoLotes") 
+
   pedidos     PedidoProducto[]  // <-- lado opuesto de PedidoProducto.producto
 
   createdAt   DateTime          @default(now())
@@ -68,6 +80,10 @@ model Lote {
   procesoActualId        Int?
   tallerActualId         Int?
   transportistaActualId  Int?
+
+    // NUEVO: producto asociado a este lote
+  productoId             Int?
+  producto               Producto?  @relation("ProductoLotes", fields: [productoId], references: [id])
 
   // Relaciones
   pedido        Pedido   @relation("PedidoLotes", fields: [pedidoId], references: [id])
