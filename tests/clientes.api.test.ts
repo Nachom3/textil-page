@@ -66,19 +66,19 @@ describe('/api/clientes/[id]', () => {
   });
 
   it('valida id no numérico', async () => {
-    const resp = await GET_DETAIL({} as any, { params: { id: 'abc' } });
+    const resp = await GET_DETAIL({} as any, { params: Promise.resolve({ id: 'abc' }) });
     expect(resp.status).toBe(400);
   });
 
   it('devuelve 404 cuando no existe', async () => {
     obtenerClienteMock.mockResolvedValue(null);
-    const resp = await GET_DETAIL({} as any, { params: { id: '10' } });
+    const resp = await GET_DETAIL({} as any, { params: Promise.resolve({ id: '10' }) });
     expect(resp.status).toBe(404);
   });
 
   it('obtiene cliente', async () => {
     obtenerClienteMock.mockResolvedValue({ id: 1, nombre: 'ACME' });
-    const resp = await GET_DETAIL({} as any, { params: { id: '1' } });
+    const resp = await GET_DETAIL({} as any, { params: Promise.resolve({ id: '1' }) });
     expect(resp.status).toBe(200);
     expect(await resp.json()).toEqual({ id: 1, nombre: 'ACME' });
   });
@@ -90,7 +90,7 @@ describe('/api/clientes/[id]', () => {
         method: 'PATCH',
         body: JSON.stringify({ nombre: 'NEW' }),
       }) as any,
-      { params: { id: '1' } },
+      { params: Promise.resolve({ id: '1' }) },
     );
     expect(resp.status).toBe(200);
     expect(await resp.json()).toEqual({ id: 1, nombre: 'NEW' });
@@ -98,7 +98,7 @@ describe('/api/clientes/[id]', () => {
 
   it('elimina cliente', async () => {
     eliminarClienteMock.mockResolvedValue({ ok: true });
-    const resp = await DELETE_DETAIL({} as any, { params: { id: '1' } });
+    const resp = await DELETE_DETAIL({} as any, { params: Promise.resolve({ id: '1' }) });
     expect(resp.status).toBe(200);
     expect(await resp.json()).toEqual({ ok: true });
   });

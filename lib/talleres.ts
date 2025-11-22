@@ -22,6 +22,7 @@ export async function listarTalleres(opts?: { q?: string; tipo?: string }) {
 
   return prisma.taller.findMany({
     where: {
+      activo: true,
       AND: [
         q
           ? {
@@ -41,7 +42,7 @@ export async function listarTalleres(opts?: { q?: string; tipo?: string }) {
 
 export async function obtenerTallerConDetalle(id: number) {
   return prisma.taller.findUnique({
-    where: { id },
+    where: { id, activo: true },
     include: {
       lotesActuales: {
         include: {
@@ -77,7 +78,18 @@ export async function actualizarTaller(input: ActualizarTallerInput) {
 }
 
 export async function eliminarTaller(id: number) {
-  return prisma.taller.delete({
+  const activos = await prisma.lote.count({
+    where: {
+      tallerActualId: id,
+      estado: { in: ['ACTIVO', 'DIVIDIDO'] },
+    },
+  });
+  if (activos > 0) {
+    throw new Error('No se puede eliminar taller con lotes activos');
+  }
+
+  return prisma.taller.update({
     where: { id },
+    data: { activo: false },
   });
 }

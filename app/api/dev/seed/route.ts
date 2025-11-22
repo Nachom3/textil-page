@@ -9,8 +9,8 @@ export async function POST() {
   // Seed mínimo de referencia
   await prisma.proceso.upsert({
     where: { nombre: 'Costura' },
-    update: {},
-    create: { nombre: 'Costura' },
+    update: { orden: 1 },
+    create: { nombre: 'Costura', orden: 1 },
   });
 
   return NextResponse.json({ ok: true });

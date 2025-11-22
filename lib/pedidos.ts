@@ -1,11 +1,14 @@
 // lib/pedidos.ts
 'use server';
 
+import type { EstadoProceso } from '@/app/generated/prisma/enums';
 import { prisma } from './prisma';
-import { generarPlanDeProduccion } from './produccion';
+import { generarPlanDeProduccion, getEstadoLote } from './produccion';
 import {
   calcularAvanceLote,
   calcularAvancePedido,
+  calcularCostoPedido,
+  calcularFechaEstimadaEntregaLote,
   calcularTiempoRestanteLote,
   calcularTiempoRestantePedido,
   type LoteConHistorial,
@@ -166,8 +169,31 @@ export async function subdividirLote(
   return prisma.$transaction(async (tx) => {
     const lotePadre = await tx.lote.findUnique({
       where: { id: loteId },
+      include: {
+        procesosHistorial: {
+          include: { proceso: true },
+          orderBy: { id: 'asc' },
+        },
+      },
     });
     if (!lotePadre) throw new Error('Lote padre no encontrado');
+    if (lotePadre.estado === 'TERMINADO') {
+      throw new Error('No se puede subdividir un lote TERMINADO');
+    }
+
+    const procesosHistorial =
+      lotePadre.procesosHistorial && Array.isArray(lotePadre.procesosHistorial)
+        ? lotePadre.procesosHistorial
+        : [];
+
+    if (!procesosHistorial.length && lotePadre.productoId) {
+      await generarPlanDeProduccion(lotePadre.id, lotePadre.productoId, tx);
+      lotePadre.procesosHistorial = await tx.procesoRealizado.findMany({
+        where: { loteId: lotePadre.id },
+        include: { proceso: true },
+        orderBy: { id: 'asc' },
+      });
+    }
 
     const sumaSubLotes = subLotes.reduce((acc, s) => acc + s.cantidad, 0);
     if (sumaSubLotes !== lotePadre.cantidad) {
@@ -182,23 +208,67 @@ export async function subdividirLote(
       data: { estado: 'DIVIDIDO' },
     });
 
-    // 2) Crear sublotes heredando el producto del padre
-    const nuevosSubLotes = await Promise.all(
-      subLotes.map((s) =>
-        tx.lote.create({
-          data: {
-            codigo: s.codigo,
-            pedidoId: lotePadre.pedidoId,
-            parentId: lotePadre.id,
-            cantidad: s.cantidad,
-            procesoActualId: lotePadre.procesoActualId,
-            tallerActualId: lotePadre.tallerActualId,
-            transportistaActualId: lotePadre.transportistaActualId,
-            productoId: lotePadre.productoId ?? null,
-          },
-        }),
-      ),
+    const ahora = new Date();
+    const historialOrdenado = [...(lotePadre.procesosHistorial ?? [])].sort((a, b) => {
+      const ordenA = a.proceso?.orden ?? 0;
+      const ordenB = b.proceso?.orden ?? 0;
+      if (ordenA === ordenB) return a.id - b.id;
+      return ordenA - ordenB;
+    });
+    const indiceActivo = historialOrdenado.findIndex(
+      (p) => p.estado !== 'COMPLETADO',
     );
+
+    // 2) Crear sublotes heredando el producto y el estado del padre
+    const nuevosSubLotes = [];
+    for (const s of subLotes) {
+      const nuevo = await tx.lote.create({
+        data: {
+          codigo: s.codigo,
+          pedidoId: lotePadre.pedidoId,
+          parentId: lotePadre.id,
+          cantidad: s.cantidad,
+          procesoActualId: lotePadre.procesoActualId,
+          tallerActualId: lotePadre.tallerActualId,
+          transportistaActualId: lotePadre.transportistaActualId,
+          productoId: lotePadre.productoId ?? null,
+        },
+      });
+
+      for (const [idx, paso] of historialOrdenado.entries()) {
+        const completado =
+          paso.estado === 'COMPLETADO' || (!!paso.fechaSalida && !paso.estado);
+        const esActivo = idx === indiceActivo && !completado;
+        const estadoClonado: EstadoProceso = completado
+          ? 'COMPLETADO'
+          : esActivo && paso.estado === 'EN_PROCESO'
+            ? 'EN_PROCESO'
+            : 'PENDIENTE';
+
+        await tx.procesoRealizado.create({
+          data: {
+            loteId: nuevo.id,
+            procesoId: paso.procesoId,
+            tallerId: paso.tallerId,
+            transportistaId: paso.transportistaId,
+            estado: estadoClonado,
+            fechaEntrada:
+              completado || (esActivo && paso.estado === 'EN_PROCESO')
+                ? paso.fechaEntrada ?? ahora
+                : null,
+            fechaSalida: completado ? paso.fechaSalida ?? ahora : null,
+            notas: paso.notas,
+            precio: paso.precio,
+            requiereAdelanto: paso.requiereAdelanto,
+            especificaciones: paso.especificaciones,
+            esTransporte: paso.esTransporte,
+          },
+        });
+      }
+
+      await getEstadoLote(nuevo.id, tx);
+      nuevosSubLotes.push(nuevo);
+    }
 
     return { lotePadre, nuevosSubLotes };
   });
@@ -222,12 +292,16 @@ export async function moverLote(input: MoverLoteInput) {
     const lote = await tx.lote.findUnique({ where: { id: loteId } });
     if (!lote) throw new Error('Lote no encontrado');
 
+    const estadoProceso: EstadoProceso =
+      fechaSalida !== null ? 'COMPLETADO' : 'EN_PROCESO';
+
     const procesoRealizado = await tx.procesoRealizado.create({
       data: {
         loteId,
         procesoId: procesoId ?? null,
         tallerId,
         transportistaId,
+        estado: estadoProceso,
         fechaEntrada,
         fechaSalida,
         notas,
@@ -397,7 +471,16 @@ export async function obtenerPedidoConMetricas(
       loteConHistorial,
       procesos,
     );
-    return { ...loteConHistorial, avance, tiempoRestanteDias };
+    const fechaEstimadaFinalizacion = calcularFechaEstimadaEntregaLote(
+      loteConHistorial,
+      procesos,
+    );
+    return {
+      ...loteConHistorial,
+      avance,
+      tiempoRestanteDias,
+      fechaEstimadaFinalizacion,
+    };
   });
 
   const pedidoParaCalcular = { ...pedido, lotes: lotesConMetricas };
@@ -406,16 +489,22 @@ export async function obtenerPedidoConMetricas(
     pedidoParaCalcular,
     procesos,
   );
+  const costoPedido = calcularCostoPedido(pedidoParaCalcular);
+
+  const procesosTimestamps = lotesConMetricas.flatMap((l) =>
+    l.procesosHistorial.map((p) => {
+      const fechaBase = p.fechaSalida ?? p.fechaEntrada ?? new Date(0);
+      const fecha =
+        fechaBase instanceof Date ? fechaBase : new Date(fechaBase as Date);
+      return fecha.getTime();
+    }),
+  );
 
   const lastUpdated = new Date(
     Math.max(
-      ...[
-        pedido.updatedAt.getTime(),
-        ...lotesConMetricas.map((l) => l.updatedAt.getTime()),
-        ...lotesConMetricas.flatMap((l) =>
-          l.procesosHistorial.map((p) => p.updatedAt.getTime()),
-        ),
-      ],
+      pedido.updatedAt.getTime(),
+      ...lotesConMetricas.map((l) => l.updatedAt.getTime()),
+      ...procesosTimestamps,
     ),
   );
 
@@ -425,6 +514,7 @@ export async function obtenerPedidoConMetricas(
     metricas: {
       avancePedido,
       tiempoRestantePedido,
+      costoPedido,
       lastUpdated,
     },
   };

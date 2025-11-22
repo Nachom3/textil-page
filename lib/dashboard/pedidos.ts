@@ -1,11 +1,14 @@
+'use server';
+
 import type { z } from 'zod';
+import { prisma } from '../prisma';
+import { dashboardPedidosQuerySchema } from '../validators';
 import {
   calcularAvancePedido,
   calcularTiempoRestantePedido,
   type PedidoConLotes,
 } from '../calculos';
-import { prisma } from '../prisma';
-import { dashboardPedidosQuerySchema } from '../validators';
+import { Prisma } from '@/app/generated/prisma/client';
 
 export type DashboardPedidosQuery = z.infer<typeof dashboardPedidosQuerySchema>;
 
@@ -35,13 +38,21 @@ const deriveStatus = (
 export async function getDashboardPedidosResumen(
   query: DashboardPedidosQuery,
 ): Promise<PedidoResumen[]> {
-  const where: Parameters<typeof prisma.pedido.findMany>[0]['where'] = {
+  const where: Prisma.PedidoWhereInput = {
     lotes: { some: { estado: { not: 'TERMINADO' } } },
   };
 
   if (query.cliente) {
-    where.cliente = { contains: query.cliente, mode: 'insensitive' };
+    where.cliente = {
+      is: {
+        nombre: {
+          contains: query.cliente,
+          mode: 'insensitive',
+        },
+      },
+    };
   }
+
   if (query.desde || query.hasta) {
     where.createdAt = {
       gte: query.desde ?? undefined,
@@ -55,10 +66,15 @@ export async function getDashboardPedidosResumen(
       select: {
         id: true,
         numero: true,
-        cliente: true,
+        clienteId: true,
         contacto: true,
         createdAt: true,
         updatedAt: true,
+        cliente: {
+          select: {
+            nombre: true,
+          },
+        },
         lotes: {
           select: {
             id: true,
@@ -76,10 +92,10 @@ export async function getDashboardPedidosResumen(
                 procesoId: true,
                 tallerId: true,
                 transportistaId: true,
+                estado: true,
                 fechaEntrada: true,
                 fechaSalida: true,
                 notas: true,
-                updatedAt: true,
                 proceso: {
                   select: {
                     id: true,
@@ -92,19 +108,33 @@ export async function getDashboardPedidosResumen(
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: {
+        createdAt: 'desc',
+      },
     }),
+
     prisma.proceso.findMany({
-      select: { id: true, orden: true, duracionEstandarDias: true },
-      orderBy: { orden: 'asc' },
+      select: {
+        id: true,
+        orden: true,
+        duracionEstandarDias: true,
+      },
+      orderBy: {
+        orden: 'asc',
+      },
     }),
   ]);
 
+  type PedidoConCliente = PedidoConLotes & {
+    cliente?: { nombre?: string | null } | null;
+  };
+
   const mapped = pedidos.map<PedidoResumen>((pedido) => {
-    const pedidoTyped = pedido as unknown as PedidoConLotes;
-    const avancePedido = calcularAvancePedido(pedidoTyped);
+    const pedidoTyped = pedido as unknown as PedidoConCliente;
+
+    const avancePedido = calcularAvancePedido(pedidoTyped as PedidoConLotes);
     const tiempoRestantePedido = calcularTiempoRestantePedido(
-      pedidoTyped,
+      pedidoTyped as PedidoConLotes,
       procesos,
     );
     const status = deriveStatus(avancePedido, tiempoRestantePedido);
@@ -112,7 +142,7 @@ export async function getDashboardPedidosResumen(
     return {
       id: pedido.id,
       numero: pedido.numero,
-      cliente: pedido.cliente,
+      cliente: pedidoTyped.cliente?.nombre ?? 'N/A',
       contacto: pedido.contacto ?? null,
       createdAt: pedido.createdAt,
       updatedAt: pedido.updatedAt,

@@ -12,13 +12,14 @@ export async function PUT(req: NextRequest, ctx: Params) {
     }
 
     const body = await req.json();
-    const { nombre, codigo, tieneTalles } = body;
+    const { nombre, codigo, tieneTalles, plantilla } = body;
 
     const producto = await actualizarProducto({
       id,
       nombre,
       codigo,
       tieneTalles,
+      plantilla,
     });
 
     return NextResponse.json(producto);

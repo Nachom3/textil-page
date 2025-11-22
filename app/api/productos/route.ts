@@ -20,7 +20,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { nombre, codigo, tieneTalles } = body;
+    const { nombre, codigo, tieneTalles, plantilla } = body;
 
     if (!nombre || !codigo) {
       return NextResponse.json(
@@ -29,7 +29,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const producto = await crearProducto({ nombre, codigo, tieneTalles });
+    const producto = await crearProducto({
+      nombre,
+      codigo,
+      tieneTalles,
+      plantilla,
+    });
     return NextResponse.json(producto, { status: 201 });
   } catch (error: unknown) {
     console.error(error);

@@ -1,6 +1,6 @@
 'use server';
 
-import type { Prisma } from '@/app/generated/prisma';
+import type { Prisma } from '@/app/generated/prisma/client';
 import { prisma } from './prisma';
 
 export type PlantillaPasoInput = {
@@ -9,6 +9,9 @@ export type PlantillaPasoInput = {
   orden: number;
   duracionEstimadaDias?: number | null;
   tallerPorDefectoId?: number | null;
+  precio?: number | null;
+  requiereAdelanto?: boolean;
+  especificaciones?: string | null;
   esTransporte?: boolean;
 };
 
@@ -36,24 +39,29 @@ export async function listarProductos() {
 export async function crearProducto(input: CrearProductoInput) {
   const { nombre, codigo, tieneTalles = false, plantilla } = input;
 
-  const data: Prisma.ProductoCreateInput = {
-    nombre,
-    codigo,
-    tieneTalles,
-    plantillaPasos: plantilla
-      ? {
-          create: plantilla.map((p) => ({
-            nombre: p.nombre,
-            orden: p.orden,
-            duracionEstimadaDias: p.duracionEstimadaDias ?? null,
-            tallerPorDefectoId: p.tallerPorDefectoId ?? null,
-            esTransporte: p.esTransporte ?? false,
-          })),
-        }
-      : undefined,
-  };
+  return prisma.$transaction(async (tx) => {
+    const producto = await tx.producto.create({
+      data: { nombre, codigo, tieneTalles },
+    });
 
-  return prisma.producto.create({ data });
+    if (plantilla?.length) {
+      await tx.plantillaPaso.createMany({
+        data: plantilla.map((p) => ({
+          productoId: producto.id,
+          nombre: p.nombre,
+          orden: p.orden,
+          duracionEstimadaDias: p.duracionEstimadaDias ?? null,
+          tallerPorDefectoId: p.tallerPorDefectoId ?? null,
+          precio: p.precio ?? null,
+          requiereAdelanto: p.requiereAdelanto ?? false,
+          especificaciones: p.especificaciones ?? null,
+          esTransporte: p.esTransporte ?? false,
+        })),
+      });
+    }
+
+    return producto;
+  });
 }
 
 export async function actualizarProducto(input: ActualizarProductoInput) {
@@ -91,6 +99,9 @@ export async function actualizarProducto(input: ActualizarProductoInput) {
               orden: paso.orden,
               duracionEstimadaDias: paso.duracionEstimadaDias ?? null,
               tallerPorDefectoId: paso.tallerPorDefectoId ?? null,
+              precio: paso.precio ?? null,
+              requiereAdelanto: paso.requiereAdelanto ?? false,
+              especificaciones: paso.especificaciones ?? null,
               esTransporte: paso.esTransporte ?? false,
             },
           });
@@ -102,6 +113,9 @@ export async function actualizarProducto(input: ActualizarProductoInput) {
               orden: paso.orden,
               duracionEstimadaDias: paso.duracionEstimadaDias ?? null,
               tallerPorDefectoId: paso.tallerPorDefectoId ?? null,
+              precio: paso.precio ?? null,
+              requiereAdelanto: paso.requiereAdelanto ?? false,
+              especificaciones: paso.especificaciones ?? null,
               esTransporte: paso.esTransporte ?? false,
             },
           });
@@ -135,6 +149,9 @@ export async function obtenerConfiguracionProducto(productoId: number) {
           orden: true,
           duracionEstimadaDias: true,
           tallerPorDefectoId: true,
+          precio: true,
+          requiereAdelanto: true,
+          especificaciones: true,
           esTransporte: true,
           tallerPorDefecto: { select: { id: true, nombre: true } },
         },

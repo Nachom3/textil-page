@@ -3,11 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rastrearPedidoPorNumero } from '@/lib/pedidos';
 
 type Params = {
-  params: { numero: string };
+  params: Promise<{ numero: string }>;
 };
 
 export async function GET(_req: NextRequest, { params }: Params) {
-  const numero = Number(params.numero);
+  const { numero: rawNumero } = await params;
+  const numero = Number(rawNumero);
 
   if (Number.isNaN(numero)) {
     return NextResponse.json(

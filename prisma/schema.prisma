@@ -21,6 +21,7 @@ model Cliente {
   ubicacion String?
   telefono  String?
   email     String?
+  pedidos   Pedido[]
 }
 
 // ---------- PEDIDOS ----------
@@ -28,11 +29,13 @@ model Cliente {
 model Pedido {
   id        Int              @id @default(autoincrement())
   numero    Int              @unique      // ej: 40
-  cliente   String
+  clienteId Int
+  cliente   Cliente          @relation(fields: [clienteId], references: [id])
   contacto  String?
 
   productos PedidoProducto[]
   lotes     Lote[]           @relation("PedidoLotes")
+  registrosManuales RegistroManual[]
 
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
@@ -68,6 +71,9 @@ model PlantillaPaso {
   nombre               String
   orden                Int
   duracionEstimadaDias Float?
+  precio               Float?
+  requiereAdelanto     Boolean  @default(false)
+  especificaciones     String?
   tallerPorDefectoId   Int?
   esTransporte         Boolean  @default(false)
 
@@ -88,6 +94,13 @@ enum LoteEstado {
   ACTIVO
   DIVIDIDO
   TERMINADO
+}
+
+enum EstadoProceso {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADO
+  NO_ENVIADO
 }
 
 model Lote {
@@ -148,10 +161,12 @@ model Taller {
   tipo      String
   direccion String?
   telefono  String?
+  activo    Boolean  @default(true)
 
   lotesActuales    Lote[]              @relation("LoteTallerActual")
   procesosHistorial ProcesoRealizado[] @relation("ProcesoRealizadoTaller")
   plantillasPorDefecto PlantillaPaso[] @relation("PlantillaPasoTallerPorDefecto")
+  registrosManuales RegistroManual[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -161,6 +176,7 @@ model Transportista {
   id        Int      @id @default(autoincrement())
   nombre    String
   telefono  String?
+  activo    Boolean  @default(true)
 
   lotesActuales     Lote[]              @relation("LoteTransportistaActual")
   procesosHistorial ProcesoRealizado[]  @relation("ProcesoRealizadoTransportista")
@@ -179,12 +195,42 @@ model ProcesoRealizado {
   tallerId        Int?
   transportistaId Int?
 
-  fechaEntrada    DateTime @default(now())
+  estado          EstadoProceso @default(PENDIENTE)
+  fechaEntrada    DateTime?
   fechaSalida     DateTime?
   notas           String?
+  precio               Float?
+  requiereAdelanto     Boolean  @default(false)
+  especificaciones     String?
+  esTransporte         Boolean  @default(false)
 
   lote          Lote          @relation("LoteProcesoRealizado", fields: [loteId], references: [id])
   proceso       Proceso?      @relation("ProcesoRealizadoProceso", fields: [procesoId], references: [id])
   taller        Taller?       @relation("ProcesoRealizadoTaller", fields: [tallerId], references: [id])
   transportista Transportista? @relation("ProcesoRealizadoTransportista", fields: [transportistaId], references: [id])
+}
+
+// ---------- REGISTROS MANUALES ----------
+
+enum TipoRegistroManual {
+  PAGO
+  RECORDATORIO
+  NOTA_GENERAL
+}
+
+model RegistroManual {
+  id          Int      @id @default(autoincrement())
+  tipo        TipoRegistroManual
+  descripcion String
+  monto       Float?
+  fecha       DateTime @default(now())
+  usuario     String?
+  pedidoId    Int?
+  tallerId    Int?
+
+  pedido Pedido? @relation(fields: [pedidoId], references: [id])
+  taller Taller? @relation(fields: [tallerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

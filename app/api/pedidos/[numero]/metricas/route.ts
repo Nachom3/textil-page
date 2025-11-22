@@ -5,9 +5,10 @@ import { obtenerPedidoConMetricas } from '@/lib/pedidos';
 
 export async function GET(
   req: Request,
-  { params }: { params: { numero: string } },
+  { params }: { params: Promise<{ numero: string }> },
 ) {
-  const numero = Number(params.numero);
+  const { numero: rawNumero } = await params;
+  const numero = Number(rawNumero);
 
   if (!Number.isFinite(numero)) {
     return NextResponse.json(

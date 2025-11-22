@@ -1,7 +1,7 @@
 // lib/clientes.ts
 'use server';
 
-import type { Prisma } from '@/app/generated/prisma';
+import type { Prisma } from '@/app/generated/prisma/client';
 import { prisma } from './prisma';
 
 export type CrearClienteInput = {

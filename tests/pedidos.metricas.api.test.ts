@@ -18,7 +18,7 @@ describe('GET /api/pedidos/[numero]/metricas', () => {
   });
 
   it('responde 400 si el numero no es valido', async () => {
-    const resp = await GET(buildReq(), { params: { numero: 'abc' } });
+    const resp = await GET(buildReq(), { params: Promise.resolve({ numero: 'abc' }) });
     expect(resp.status).toBe(400);
     const json = await resp.json();
     expect(json.error).toMatch(/numero debe ser num/i);
@@ -26,7 +26,7 @@ describe('GET /api/pedidos/[numero]/metricas', () => {
 
   it('responde 404 si no existe el pedido', async () => {
     obtenerPedidoConMetricasMock.mockResolvedValue(null);
-    const resp = await GET(buildReq(), { params: { numero: '10' } });
+    const resp = await GET(buildReq(), { params: Promise.resolve({ numero: '10' }) });
     expect(resp.status).toBe(404);
   });
 
@@ -42,7 +42,7 @@ describe('GET /api/pedidos/[numero]/metricas', () => {
     };
     obtenerPedidoConMetricasMock.mockResolvedValue(payload);
 
-    const resp = await GET(buildReq(), { params: { numero: '10' } });
+    const resp = await GET(buildReq(), { params: Promise.resolve({ numero: '10' }) });
     expect(obtenerPedidoConMetricasMock).toHaveBeenCalledWith(10);
     expect(resp.status).toBe(200);
     const json = await resp.json();
@@ -63,14 +63,14 @@ describe('GET /api/pedidos/[numero]/metricas', () => {
     obtenerPedidoConMetricasMock.mockResolvedValue(payload);
 
     // Primera llamada para obtener ETag
-    const first = await GET(buildReq(), { params: { numero: '10' } });
+    const first = await GET(buildReq(), { params: Promise.resolve({ numero: '10' }) });
     const etag = first.headers.get('etag');
     expect(etag).toBeTruthy();
 
     // Segunda llamada con If-None-Match
     const second = await GET(
       buildReq({ 'if-none-match': etag ?? '' }),
-      { params: { numero: '10' } },
+      { params: Promise.resolve({ numero: '10' }) },
     );
     expect(second.status).toBe(304);
   });

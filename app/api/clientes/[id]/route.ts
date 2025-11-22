@@ -7,11 +7,11 @@ import {
 } from '@/lib/clientes';
 import { actualizarClienteSchema } from '@/lib/validators';
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } },
-) {
-  const id = Number(params.id);
+type Params = { params: Promise<{ id: string }> };
+
+export async function GET(_req: Request, { params }: Params) {
+  const { id: rawId } = await params;
+  const id = Number(rawId);
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: 'id debe ser numérico' }, { status: 400 });
   }
@@ -31,11 +31,9 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
-  const id = Number(params.id);
+export async function PATCH(req: Request, { params }: Params) {
+  const { id: rawId } = await params;
+  const id = Number(rawId);
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: 'id debe ser numérico' }, { status: 400 });
   }
@@ -60,11 +58,9 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } },
-) {
-  const id = Number(params.id);
+export async function DELETE(_req: Request, { params }: Params) {
+  const { id: rawId } = await params;
+  const id = Number(rawId);
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: 'id debe ser numérico' }, { status: 400 });
   }
