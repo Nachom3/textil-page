@@ -56,9 +56,29 @@ model Producto {
 
   lotes       Lote[]            @relation("ProductoLotes")
   pedidos     PedidoProducto[]
+  plantillaPasos PlantillaPaso[]
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+}
+
+model PlantillaPaso {
+  id                   Int      @id @default(autoincrement())
+  productoId           Int
+  nombre               String
+  orden                Int
+  duracionEstimadaDias Float?
+  tallerPorDefectoId   Int?
+  esTransporte         Boolean  @default(false)
+
+  producto             Producto @relation(fields: [productoId], references: [id])
+  tallerPorDefecto     Taller?  @relation("PlantillaPasoTallerPorDefecto", fields: [tallerPorDefectoId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productoId, orden])
+  @@unique([productoId, nombre])
 }
 
 
@@ -131,6 +151,7 @@ model Taller {
 
   lotesActuales    Lote[]              @relation("LoteTallerActual")
   procesosHistorial ProcesoRealizado[] @relation("ProcesoRealizadoTaller")
+  plantillasPorDefecto PlantillaPaso[] @relation("PlantillaPasoTallerPorDefecto")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

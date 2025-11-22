@@ -67,4 +67,20 @@ export async function eliminarCliente(id: number) {
     where: { id },
   });
 }
+
+export async function buscarClientesPorNombre(query: string, limit = 10) {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  return prisma.cliente.findMany({
+    where: {
+      OR: [
+        { nombre: { contains: trimmed, mode: 'insensitive' } },
+        { apellido: { contains: trimmed, mode: 'insensitive' } },
+      ],
+    },
+    orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }],
+    take: limit,
+  });
+}
     

@@ -34,7 +34,11 @@ describe('GET /api/pedidos/[numero]/metricas', () => {
     const payload = {
       pedido: { id: 1, numero: 10 },
       lotes: [],
-      metricas: { avancePedido: 0.5, tiempoRestantePedido: 2 },
+      metricas: {
+        avancePedido: 0.5,
+        tiempoRestantePedido: 2,
+        lastUpdated: new Date(),
+      },
     };
     obtenerPedidoConMetricasMock.mockResolvedValue(payload);
 
@@ -50,7 +54,11 @@ describe('GET /api/pedidos/[numero]/metricas', () => {
     const payload = {
       pedido: { id: 1, numero: 10 },
       lotes: [],
-      metricas: { avancePedido: 0.5, tiempoRestantePedido: 2 },
+      metricas: {
+        avancePedido: 0.5,
+        tiempoRestantePedido: 2,
+        lastUpdated: new Date(),
+      },
     };
     obtenerPedidoConMetricasMock.mockResolvedValue(payload);
 

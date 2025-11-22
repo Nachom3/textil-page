@@ -1,10 +1,12 @@
 // app/api/pedidos/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { crearPedido } from '@/lib/pedidos';
+import { crearPedidoSchema } from '@/lib/validators';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const raw = await req.json();
+    const parsed = crearPedidoSchema.parse(raw);
 
     const {
       numero,
@@ -14,18 +16,13 @@ export async function POST(req: NextRequest) {
       contacto,
       items,
       crearLoteRaiz,
-    } = body;
+    } = parsed;
 
     const nombreNormalizado = clienteNombre ?? cliente;
 
-    if (
-      !numero ||
-      (!clienteId && !nombreNormalizado) ||
-      !Array.isArray(items) ||
-      items.length === 0
-    ) {
+    if (!clienteId && !nombreNormalizado) {
       return NextResponse.json(
-        { error: 'numero, clienteId/clienteNombre e items son requeridos' },
+        { error: 'clienteId o clienteNombre son requeridos', code: 'VALIDATION_ERROR' },
         { status: 400 },
       );
     }
@@ -45,9 +42,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : 'Error creando pedido',
+          error && typeof error === 'object' && (error as any).name === 'ZodError'
+            ? 'Payload inválido'
+            : error instanceof Error
+              ? error.message
+              : 'Error creando pedido',
+        code: (error as any)?.name === 'ZodError' ? 'VALIDATION_ERROR' : 'SERVER_ERROR',
       },
-      { status: 500 },
+      { status: (error as any)?.name === 'ZodError' ? 400 : 500 },
     );
   }
 }

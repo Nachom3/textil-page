@@ -23,7 +23,7 @@ describe('POST /api/pedidos', () => {
     const resp = await POST(buildRequest({}) as any);
     expect(resp.status).toBe(400);
     const json = await resp.json();
-    expect(json.error).toMatch(/requeridos/);
+    expect(json.code).toBe('VALIDATION_ERROR');
   });
 
   it('repondes 400 si items no es array', async () => {

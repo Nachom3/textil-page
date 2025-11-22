@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { obtenerPedidoConMetricas } from '../lib/pedidos';
 import type { LoteConHistorial } from '../lib/calculos';
+import type { LoteConMetricas } from '../lib/calculos'; // Import the extended type
 
 const findUniqueMock = vi.hoisted(() => vi.fn());
 const findManyMock = vi.hoisted(() => vi.fn());
@@ -14,7 +15,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
-const baseLote = (overrides: Partial<LoteConHistorial> = {}): LoteConHistorial => ({
+const baseLote = (overrides: Partial<LoteConMetricas> = {}): LoteConMetricas => ({
   id: overrides.id ?? 1,
   codigo: overrides.codigo ?? '10.1',
   pedidoId: overrides.pedidoId ?? 1,
@@ -97,8 +98,9 @@ describe('obtenerPedidoConMetricas', () => {
     expect(result?.metricas.avancePedido).toBeCloseTo(0.5, 2);
     expect(result?.metricas.tiempoRestantePedido).toBeCloseTo(2, 2);
 
-    const lote1 = result?.lotes.find((l) => l.id === 1);
-    const lote2 = result?.lotes.find((l) => l.id === 2);
+
+    const lote1 = result?.lotes.find((l: LoteConMetricas) => l.id === 1);
+    const lote2 = result?.lotes.find((l: LoteConMetricas) => l.id === 2);
 
     expect(lote1?.avance).toBe(1);
     expect(lote1?.tiempoRestanteDias).toBe(1);

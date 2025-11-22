@@ -2,6 +2,7 @@
 'use server';
 
 import { prisma } from './prisma';
+import { generarPlanDeProduccion } from './produccion';
 import {
   calcularAvanceLote,
   calcularAvancePedido,
@@ -61,7 +62,7 @@ export async function crearPedido(input: CrearPedidoInput) {
     throw new Error('clienteId o clienteNombre son requeridos');
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     let resolvedClienteId = clienteId ?? null;
 
     if (!resolvedClienteId && nombreParaCrear) {
@@ -115,6 +116,16 @@ export async function crearPedido(input: CrearPedidoInput) {
 
     return { pedido, lotesRaiz };
   });
+
+  if (crearLoteRaiz && Array.isArray(result.lotesRaiz)) {
+    await Promise.all(
+      result.lotesRaiz.map((lote: any) =>
+        generarPlanDeProduccion(lote.id, lote.productoId ?? 0),
+      ),
+    );
+  }
+
+  return result;
 }
 
 // ---------- CREAR LOTE SUELTO ----------
@@ -380,12 +391,13 @@ export async function obtenerPedidoConMetricas(
   if (!pedido) return null;
 
   const lotesConMetricas = pedido.lotes.map((lote) => {
-    const avance = calcularAvanceLote(lote as LoteConHistorial);
+    const loteConHistorial = lote as LoteConHistorial;
+    const avance = calcularAvanceLote(loteConHistorial);
     const tiempoRestanteDias = calcularTiempoRestanteLote(
-      lote as LoteConHistorial,
+      loteConHistorial,
       procesos,
     );
-    return { ...lote, avance, tiempoRestanteDias };
+    return { ...loteConHistorial, avance, tiempoRestanteDias };
   });
 
   const pedidoParaCalcular = { ...pedido, lotes: lotesConMetricas };
@@ -395,12 +407,25 @@ export async function obtenerPedidoConMetricas(
     procesos,
   );
 
+  const lastUpdated = new Date(
+    Math.max(
+      ...[
+        pedido.updatedAt.getTime(),
+        ...lotesConMetricas.map((l) => l.updatedAt.getTime()),
+        ...lotesConMetricas.flatMap((l) =>
+          l.procesosHistorial.map((p) => p.updatedAt.getTime()),
+        ),
+      ],
+    ),
+  );
+
   return {
     pedido: pedidoParaCalcular,
     lotes: lotesConMetricas,
     metricas: {
       avancePedido,
       tiempoRestantePedido,
+      lastUpdated,
     },
   };
 }

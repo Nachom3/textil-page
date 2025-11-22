@@ -1,36 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { obtenerTallerConLotes } from '@/lib/talleres';
+import {
+  obtenerTallerConDetalle,
+  actualizarTaller,
+  eliminarTaller,
+} from '@/lib/talleres';
 
-type Params = {
-  params: Promise<{ id: string }>;
-};
+type Params = { params: { id: string } };
 
-export async function GET(_req: NextRequest, ctx: Params) {
-  try {
-    const { id } = await ctx.params;
-    const idNum = Number(id);
-    if (Number.isNaN(idNum)) {
-      return NextResponse.json({ error: 'ID invalido' }, { status: 400 });
-    }
-
-    const taller = await obtenerTallerConLotes(idNum);
-
-    if (!taller) {
-      return NextResponse.json(
-        { error: 'Taller no encontrado' },
-        { status: 404 },
-      );
-    }
-
-    return NextResponse.json(taller);
-  } catch (error: unknown) {
-    console.error(error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : 'Error obteniendo taller',
-      },
-      { status: 500 },
-    );
+export async function GET(_req: NextRequest, { params }: Params) {
+  const id = Number(params.id);
+  if (Number.isNaN(id)) {
+    return NextResponse.json({ error: 'ID inválido', code: 'VALIDATION_ERROR' }, { status: 400 });
   }
+
+  const taller = await obtenerTallerConDetalle(id);
+  if (!taller) {
+    return NextResponse.json({ error: 'Taller no encontrado', code: 'NOT_FOUND' }, { status: 404 });
+  }
+
+  return NextResponse.json(taller, { status: 200 });
+}
+
+export async function PUT(req: NextRequest, { params }: Params) {
+  const id = Number(params.id);
+  if (Number.isNaN(id)) {
+    return NextResponse.json({ error: 'ID inválido', code: 'VALIDATION_ERROR' }, { status: 400 });
+  }
+
+  const body = await req.json();
+  const taller = await actualizarTaller({ id, ...body });
+
+  return NextResponse.json(taller, { status: 200 });
+}
+
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const id = Number(params.id);
+  if (Number.isNaN(id)) {
+    return NextResponse.json({ error: 'ID inválido', code: 'VALIDATION_ERROR' }, { status: 400 });
+  }
+
+  await eliminarTaller(id);
+  return NextResponse.json({ ok: true }, { status: 200 });
 }

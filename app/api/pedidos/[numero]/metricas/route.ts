@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createHash } from 'crypto';
+import { formatRFC7231 } from 'date-fns';
 import { obtenerPedidoConMetricas } from '@/lib/pedidos';
 
 export async function GET(
@@ -10,7 +11,7 @@ export async function GET(
 
   if (!Number.isFinite(numero)) {
     return NextResponse.json(
-      { error: 'numero debe ser num�rico' },
+      { error: 'numero debe ser numérico', code: 'VALIDATION_ERROR' },
       { status: 400 },
     );
   }
@@ -19,7 +20,7 @@ export async function GET(
     const data = await obtenerPedidoConMetricas(numero);
     if (!data) {
       return NextResponse.json(
-        { error: 'Pedido no encontrado' },
+        { error: 'Pedido no encontrado', code: 'NOT_FOUND' },
         { status: 404 },
       );
     }
@@ -27,9 +28,13 @@ export async function GET(
     const body = JSON.stringify(data);
     const etag = createHash('sha1').update(body).digest('hex');
     const ifNoneMatch = req.headers.get('if-none-match');
+    const lastModified = formatRFC7231(data.metricas.lastUpdated);
 
     if (ifNoneMatch && ifNoneMatch === etag) {
-      return new NextResponse(null, { status: 304, headers: { ETag: etag } });
+      return new NextResponse(null, {
+        status: 304,
+        headers: { ETag: etag, 'Last-Modified': lastModified },
+      });
     }
 
     return new NextResponse(body, {
@@ -37,12 +42,13 @@ export async function GET(
       headers: {
         'Content-Type': 'application/json',
         ETag: etag,
+        'Last-Modified': lastModified,
       },
     });
   } catch (error: unknown) {
     console.error(error);
     return NextResponse.json(
-      { error: 'Error obteniendo m�tricas del pedido' },
+      { error: 'Error obteniendo métricas del pedido', code: 'SERVER_ERROR' },
       { status: 500 },
     );
   }

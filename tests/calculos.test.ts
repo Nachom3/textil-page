@@ -4,21 +4,22 @@ import {
   calcularAvancePedido,
   calcularTiempoRestanteLote,
   calcularTiempoRestantePedido,
-  type LoteConHistorial,
+  type LoteConMetricas,
   type PedidoConLotes,
+  type ProcesoLigero,
 } from '../lib/calculos';
 
-const procesos = [
+const procesos: ProcesoLigero[] = [
   { id: 1, nombre: 'Corte', orden: 1, duracionEstandarDias: 1 },
-  { id: 2, nombre: 'Costura', orden: 2, duracionEstandarDias: 2 },
+  { id: 2, nombre: 'Costura', orden: 2, duracionEstandarDias: 1 },
   { id: 3, nombre: 'Plancha', orden: 3, duracionEstandarDias: 1 },
-] as const;
+];
 
-const baseLote = (overrides: Partial<LoteConHistorial> = {}): LoteConHistorial => ({
+const baseLote = (overrides: Partial<LoteConMetricas> = {}): LoteConMetricas => ({
   id: overrides.id ?? 1,
   codigo: overrides.codigo ?? '10.1',
   pedidoId: overrides.pedidoId ?? 1,
-  cantidad: overrides.cantidad ?? 10,
+  cantidad: overrides.cantidad ?? 5,
   estado: overrides.estado ?? 'ACTIVO',
   createdAt: overrides.createdAt ?? new Date(),
   updatedAt: overrides.updatedAt ?? new Date(),
@@ -36,7 +37,7 @@ const baseLote = (overrides: Partial<LoteConHistorial> = {}): LoteConHistorial =
 });
 
 describe('calculos', () => {
-  it('calcula avance de lote seg�n procesos completados', () => {
+  it('calcula avance de lote según procesos completados', () => {
     const lote = baseLote({
       procesosHistorial: [
         {
@@ -84,14 +85,9 @@ describe('calculos', () => {
       updatedAt: new Date(),
       contacto: null,
       lotes: [
-        {
+        baseLote({
           id: 1,
-          codigo: '10.1',
-          pedidoId: 1,
           cantidad: 6,
-          estado: 'ACTIVO',
-          createdAt: new Date(),
-          updatedAt: new Date(),
           procesosHistorial: [
             {
               id: 1,
@@ -109,37 +105,13 @@ describe('calculos', () => {
               updatedAt: new Date(),
             },
           ],
-          pedido: null,
-          parentId: null,
-          porcentajeCompletado: 0,
-          fechaIngresoProcesoActual: null,
-          fechaEstimadaFinalizacion: null,
-          tiempoRestanteDias: 0,
-          procesoActualId: null,
-          tallerActualId: null,
-          transportistaActualId: null,
-          productoId: null,
-        },
-        {
+        }),
+        baseLote({
           id: 2,
           codigo: '10.2',
-          pedidoId: 1,
           cantidad: 4,
-          estado: 'ACTIVO',
-          createdAt: new Date(),
-          updatedAt: new Date(),
           procesosHistorial: [],
-          pedido: null,
-          parentId: null,
-          porcentajeCompletado: 0,
-          fechaIngresoProcesoActual: null,
-          fechaEstimadaFinalizacion: null,
-          tiempoRestanteDias: 0,
-          procesoActualId: null,
-          tallerActualId: null,
-          transportistaActualId: null,
-          productoId: null,
-        },
+        }),
       ],
     };
 
@@ -168,12 +140,12 @@ describe('calculos', () => {
       ],
     });
 
-    // Restan procesos 2 y 3: 2 + 1 = 3 d�as
-    expect(calcularTiempoRestanteLote(lote, procesos)).toBe(3);
+    expect(calcularTiempoRestanteLote(lote, procesos)).toBe(2);
+
   });
 
   it('pondera tiempo restante del pedido por cantidad', () => {
-    const lotes: LoteConHistorial[] = [
+    const lotes: LoteConMetricas[] = [
       baseLote({
         id: 1,
         cantidad: 5,
@@ -198,7 +170,6 @@ describe('calculos', () => {
       baseLote({ id: 2, codigo: '10.2', cantidad: 5, procesosHistorial: [] }),
     ];
 
-    // Lote1: faltan procesos 2 y 3 => 3 d�as. Lote2: faltan 1,2,3 => 4 d�as. Ponderado: (3*5 + 4*5)/10 = 3.5
     const pedido: PedidoConLotes = {
       id: 1,
       numero: 11,
@@ -209,12 +180,13 @@ describe('calculos', () => {
       lotes,
     };
 
-    expect(calcularTiempoRestantePedido(pedido, procesos)).toBeCloseTo(3.5, 1);
+    // Lote1: faltan 2 procesos => 2d. Lote2: faltan 3 procesos => 3d. Ponderado: (2*5 + 3*5) / 10 = 2.5
+    expect(calcularTiempoRestantePedido(pedido, procesos)).toBeCloseTo(2.5, 1);
   });
 });
 
 describe('calculos edge cases', () => {
-  it('devuelve 1 de avance y 0 dias cuando el lote esta TERMINADO', () => {
+  it('devuelve 1 de avance y 0 dias cuando el lote está TERMINADO', () => {
     const lote = baseLote({ estado: 'TERMINADO' });
     expect(calcularAvanceLote(lote)).toBe(1);
     expect(calcularTiempoRestanteLote(lote, procesos)).toBe(0);
@@ -225,7 +197,7 @@ describe('calculos edge cases', () => {
     expect(calcularAvanceLote(lote)).toBe(0);
   });
 
-  it('omite procesos sin orden o sin duracion', () => {
+  it('omite procesos sin orden o sin duración', () => {
     const lote = baseLote({
       procesosHistorial: [
         {
@@ -246,7 +218,10 @@ describe('calculos edge cases', () => {
       ],
     });
 
-    const procesosSinOrden = [{ id: 10, orden: null, duracionEstandarDias: null }];
+    const procesosSinOrden: ProcesoLigero[] = [
+      { id: 10, orden: null, duracionEstandarDias: null },
+    ];
+
     expect(calcularTiempoRestanteLote(lote, procesosSinOrden)).toBe(0);
   });
 

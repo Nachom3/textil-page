@@ -5,6 +5,7 @@ import {
   eliminarCliente,
   type ActualizarClienteInput,
 } from '@/lib/clientes';
+import { actualizarClienteSchema } from '@/lib/validators';
 
 export async function GET(
   _req: Request,
@@ -41,13 +42,20 @@ export async function PATCH(
 
   try {
     const body = (await req.json()) as Omit<ActualizarClienteInput, 'id'>;
-    const cliente = await actualizarCliente({ ...body, id });
+    const parsed = actualizarClienteSchema.parse(body);
+    const cliente = await actualizarCliente({ ...parsed, id });
     return NextResponse.json(cliente, { status: 200 });
   } catch (error: unknown) {
     console.error(error);
     return NextResponse.json(
-      { error: 'Error actualizando cliente' },
-      { status: 500 },
+      {
+        error:
+          error && typeof error === 'object' && (error as any).name === 'ZodError'
+            ? 'Payload inválido'
+            : 'Error actualizando cliente',
+        code: (error as any)?.name === 'ZodError' ? 'VALIDATION_ERROR' : 'SERVER_ERROR',
+      },
+      { status: (error as any)?.name === 'ZodError' ? 400 : 500 },
     );
   }
 }
