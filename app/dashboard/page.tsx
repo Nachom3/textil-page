@@ -29,7 +29,7 @@ import {
 } from '@mui/icons-material';
 import { prisma } from '@/lib/prisma';
 import { obtenerPedidoConMetricas } from '@/lib/pedidos';
-import { ActionButtons } from './components/ActionButtons'; // ✅ nuevo import
+import { ActionButtons } from './_components/ActionButtons';
 
 async function getDashboardData() {
   const [pedidoCount, loteCount, productoCount, pedidos] = await Promise.all([
