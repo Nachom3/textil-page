@@ -6,6 +6,7 @@ type TxMock = {
   pedido: { create: MockFn };
   lote: { create: MockFn; update: MockFn; findUnique: MockFn };
   procesoRealizado: { create: MockFn };
+  cliente: { findFirst: MockFn; create: MockFn };
 };
 
 type PrismaMock = {
@@ -26,6 +27,10 @@ const { prismaMock, txMock } = vi.hoisted<{
       findUnique: vi.fn(),
     },
     procesoRealizado: {
+      create: vi.fn(),
+    },
+    cliente: {
+      findFirst: vi.fn(),
       create: vi.fn(),
     },
   };
@@ -66,6 +71,8 @@ describe('pedidos service', () => {
       txMock.lote.update,
       txMock.lote.findUnique,
       txMock.procesoRealizado.create,
+      txMock.cliente.findFirst,
+      txMock.cliente.create,
       prismaMock.lote.findMany,
       prismaMock.procesoRealizado.findMany,
       prismaMock.$transaction,
@@ -80,10 +87,15 @@ describe('pedidos service', () => {
   });
 
   it('crea pedido y lote raiz', async () => {
+    txMock.cliente.findFirst.mockResolvedValue(null);
+    txMock.cliente.create.mockResolvedValue({
+      id: 2,
+      nombre: 'ACME',
+    });
     txMock.pedido.create.mockResolvedValue({
       id: 1,
       numero: 10,
-      cliente: 'ACME',
+      clienteId: 2,
       contacto: 'John',
     });
     txMock.lote.create.mockResolvedValue({
@@ -96,7 +108,7 @@ describe('pedidos service', () => {
 
     const result = await crearPedido({
       numero: 10,
-      cliente: 'ACME',
+      clienteNombre: 'ACME',
       contacto: 'John',
       items: [{ productoId: 3, cantidad: 5 }],
       crearLoteRaiz: true,
@@ -106,7 +118,7 @@ describe('pedidos service', () => {
     expect(txMock.pedido.create).toHaveBeenCalledWith({
       data: {
         numero: 10,
-        cliente: 'ACME',
+        clienteId: 2,
         contacto: 'John',
         productos: {
           create: [{ productoId: 3, cantidad: 5 }],
@@ -126,7 +138,7 @@ describe('pedidos service', () => {
       pedido: {
         id: 1,
         numero: 10,
-        cliente: 'ACME',
+        clienteId: 2,
         contacto: 'John',
       },
       lotesRaiz: [

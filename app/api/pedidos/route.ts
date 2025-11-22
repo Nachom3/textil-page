@@ -6,18 +6,34 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const { numero, cliente, contacto, items, crearLoteRaiz } = body;
+    const {
+      numero,
+      clienteId,
+      clienteNombre,
+      cliente, // compatibilidad con payloads antiguos
+      contacto,
+      items,
+      crearLoteRaiz,
+    } = body;
 
-    if (!numero || !cliente || !Array.isArray(items) || items.length === 0) {
+    const nombreNormalizado = clienteNombre ?? cliente;
+
+    if (
+      !numero ||
+      (!clienteId && !nombreNormalizado) ||
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
       return NextResponse.json(
-        { error: 'numero, cliente e items son requeridos' },
+        { error: 'numero, clienteId/clienteNombre e items son requeridos' },
         { status: 400 },
       );
     }
 
     const result = await crearPedido({
       numero,
-      cliente,
+      clienteId,
+      clienteNombre: nombreNormalizado,
       contacto,
       items,
       crearLoteRaiz,

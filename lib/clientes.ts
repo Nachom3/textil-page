@@ -1,10 +1,11 @@
 // lib/clientes.ts
 'use server';
 
+import type { Prisma } from '@/app/generated/prisma';
 import { prisma } from './prisma';
 
 export type CrearClienteInput = {
-  nombre?: string | null;
+  nombre: string;
   apellido?: string | null;
   ubicacion?: string | null;
   telefono?: string | null;
@@ -13,7 +14,7 @@ export type CrearClienteInput = {
 
 export type ActualizarClienteInput = {
   id: number;
-  nombre?: string | null;
+  nombre?: string;
   apellido?: string | null;
   ubicacion?: string | null;
   telefono?: string | null;
@@ -33,23 +34,31 @@ export async function obtenerCliente(id: number) {
 }
 
 export async function crearCliente(input: CrearClienteInput) {
-  return prisma.cliente.create({
-    data: {
-      nombre: input.nombre ?? null,
-      apellido: input.apellido ?? null,
-      ubicacion: input.ubicacion ?? null,
-      telefono: input.telefono ?? null,
-      email: input.email ?? null,
-    },
-  });
+  const data: Prisma.ClienteCreateInput = {
+    nombre: input.nombre,
+    apellido: input.apellido ?? null,
+    ubicacion: input.ubicacion ?? null,
+    telefono: input.telefono ?? null,
+    email: input.email ?? null,
+  };
+
+  return prisma.cliente.create({ data });
 }
 
 export async function actualizarCliente(input: ActualizarClienteInput) {
-  const { id, ...data } = input;
+  const { id, ...rest } = input;
+
+  const data: Prisma.ClienteUpdateInput = {
+    nombre: rest.nombre ?? undefined,
+    apellido: rest.apellido ?? undefined,
+    ubicacion: rest.ubicacion ?? undefined,
+    telefono: rest.telefono ?? undefined,
+    email: rest.email ?? undefined,
+  };
 
   return prisma.cliente.update({
     where: { id },
-    data, // data ya tiene string | null | undefined, que Prisma acepta
+    data,
   });
 }
 

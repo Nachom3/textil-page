@@ -2,12 +2,20 @@
 'use server';
 
 import { prisma } from './prisma';
+import {
+  calcularAvanceLote,
+  calcularAvancePedido,
+  calcularTiempoRestanteLote,
+  calcularTiempoRestantePedido,
+  type LoteConHistorial,
+} from './calculos';
 
 // ---------- TIPOS ----------
 
 export type CrearPedidoInput = {
   numero: number;
-  cliente: string;
+  clienteId?: number;
+  clienteNombre?: string;
   contacto?: string;
   items: { productoId: number; cantidad: number }[];
   /**
@@ -38,14 +46,44 @@ export type MoverLoteInput = {
 // ---------- CREAR PEDIDO ----------
 
 export async function crearPedido(input: CrearPedidoInput) {
-  const { numero, cliente, contacto, items, crearLoteRaiz = true } = input;
+  const {
+    numero,
+    clienteId,
+    clienteNombre,
+    contacto,
+    items,
+    crearLoteRaiz = true,
+  } = input;
+
+  const nombreParaCrear = clienteNombre;
+
+  if (!clienteId && !nombreParaCrear) {
+    throw new Error('clienteId o clienteNombre son requeridos');
+  }
 
   return prisma.$transaction(async (tx) => {
+    let resolvedClienteId = clienteId ?? null;
+
+    if (!resolvedClienteId && nombreParaCrear) {
+      const clienteExistente = await tx.cliente.findFirst({
+        where: { nombre: { equals: nombreParaCrear, mode: 'insensitive' } },
+      });
+
+      if (clienteExistente) {
+        resolvedClienteId = clienteExistente.id;
+      } else {
+        const nuevoCliente = await tx.cliente.create({
+          data: { nombre: nombreParaCrear },
+        });
+        resolvedClienteId = nuevoCliente.id;
+      }
+    }
+
     // 1) Crear el pedido + sus items
     const pedido = await tx.pedido.create({
       data: {
         numero,
-        cliente,
+        clienteId: resolvedClienteId!,
         contacto,
         productos: {
           create: items.map((it) => ({
@@ -233,9 +271,12 @@ export async function rastrearPedidoPorNumero(numeroPedido: number) {
 export async function buscarPedidosPorCliente(nombreCliente: string) {
   return prisma.pedido.findMany({
     where: {
-      cliente: { contains: nombreCliente, mode: 'insensitive' },
+      cliente: {
+        nombre: { contains: nombreCliente, mode: 'insensitive' },
+      },
     },
     include: {
+      cliente: true,
       lotes: {
         include: {
           producto: true,
@@ -289,4 +330,77 @@ export async function reporteProcesosDia(fecha: Date) {
     },
     orderBy: { fechaEntrada: 'asc' },
   });
+}
+
+// ---------- M�TRICAS / AVANCE ----------
+
+export async function obtenerPedidoConMetricas(
+  numeroPedido: number,
+) {
+  const [pedido, procesos] = await Promise.all([
+    prisma.pedido.findUnique({
+      where: { numero: numeroPedido },
+      include: {
+        cliente: true,
+        productos: { include: { producto: true } },
+        lotes: {
+          include: {
+            parent: true,
+            children: true,
+            producto: true,
+            procesoActual: true,
+            tallerActual: true,
+            transportistaActual: true,
+            procesosHistorial: {
+              include: {
+                proceso: {
+                  select: {
+                    id: true,
+                    nombre: true,
+                    orden: true,
+                    duracionEstandarDias: true,
+                  },
+                },
+                taller: true,
+                transportista: true,
+              },
+              orderBy: { fechaEntrada: 'asc' },
+            },
+          },
+          orderBy: { codigo: 'asc' },
+        },
+      },
+    }),
+    prisma.proceso.findMany({
+      select: { id: true, nombre: true, orden: true, duracionEstandarDias: true },
+      orderBy: { orden: 'asc' },
+    }),
+  ]);
+
+  if (!pedido) return null;
+
+  const lotesConMetricas = pedido.lotes.map((lote) => {
+    const avance = calcularAvanceLote(lote as LoteConHistorial);
+    const tiempoRestanteDias = calcularTiempoRestanteLote(
+      lote as LoteConHistorial,
+      procesos,
+    );
+    return { ...lote, avance, tiempoRestanteDias };
+  });
+
+  const pedidoParaCalcular = { ...pedido, lotes: lotesConMetricas };
+  const avancePedido = calcularAvancePedido(pedidoParaCalcular);
+  const tiempoRestantePedido = calcularTiempoRestantePedido(
+    pedidoParaCalcular,
+    procesos,
+  );
+
+  return {
+    pedido: pedidoParaCalcular,
+    lotes: lotesConMetricas,
+    metricas: {
+      avancePedido,
+      tiempoRestantePedido,
+    },
+  };
 }
